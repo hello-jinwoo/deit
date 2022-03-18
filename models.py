@@ -16,6 +16,86 @@ __all__ = [
     'deit_base_distilled_patch16_384',
 ]
 
+""" sinusoid position embedding """
+def get_sinusoid_encoding_table(n_seq, d_hidn):
+    def cal_angle(position, i_hidn):
+        return position / 10000 ** (2 * (i_hidn // 2) / d_hidn)
+    def get_posi_angle_vec(position):
+        return [cal_angle(position, i_hidn) for i_hidn in range(d_hidn)]
+
+    sinusoid_table = torch.tensor([get_posi_angle_vec(i_seq) for i_seq in range(n_seq)])
+    sinusoid_table[:, 0::2] = torch.sin(sinusoid_table[:, 0::2])  # even index sin 
+    sinusoid_table[:, 1::2] = torch.cos(sinusoid_table[:, 1::2])  # odd index cos
+
+    return sinusoid_table
+
+def get_area_encoding(num_patches, encoding_dim=192, mode='aaud', n_extra_tokens=1, img_size=224):
+    assert mode in ['aaud', 'naive']
+    num_patches_per_row = int(num_patches ** 0.5)
+    patch_pos = torch.arange(num_patches_per_row, dtype=float) / num_patches_per_row # [0, 1/14, 2/14, ... 13/14]
+    patch_pos_pair = torch.cartesian_prod(patch_pos, patch_pos) # [[0, 0], [0, 1/14], ... [n/14, m/14], ... [13/14, 13/14]]
+    patch_area_pair = torch.zeros(len(patch_pos_pair), 4)
+    patch_area_pair[:, 0] = patch_pos_pair[:, 0]
+    patch_area_pair[:, 1] = patch_pos_pair[:, 0] + 1 / num_patches_per_row
+    patch_area_pair[:, 2] = patch_pos_pair[:, 1]
+    patch_area_pair[:, 3] = patch_pos_pair[:, 1] + 1 / num_patches_per_row
+    pos_embed = nn.Parameter(torch.zeros(1, num_patches + n_extra_tokens, encoding_dim), requires_grad=False)
+    if mode == 'aaud':
+        pos_embed[0, n_extra_tokens:, :] = get_aaud_for_patch(patch_area_pair, encoding_dim)
+    if mode == 'naive':
+        patch_size = img_size // num_patches
+        sin_table = get_sinusoid_encoding_table(img_size ** 2, encoding_dim)
+        sin_table_2d = torch.reshape(sin_table, (img_size, img_size, encoding_dim))
+        pos_embed[0, n_extra_tokens:, :] = get_naive_ae_for_patch((patch_area_pair * img_size).int(),
+                                                                   encoding_dim, 
+                                                                   sin_table_2d)
+
+    return pos_embed
+
+def get_aaud_for_patch(pos, encoding_dim=192):
+    """
+    pos_info : (num_of_patches, 4)
+    ae : (num_of_patches, encoding_dim)
+    """
+    x_start, x_end, y_start, y_end = pos[:, 0], pos[:, 1], pos[:, 2], pos[:, 3]
+    x_start, x_end, y_start, y_end = x_start[:, None], x_end[:, None], y_start[:, None], y_end[:, None]
+
+    # IN PROGRESS: experiments on scale of coefficient
+    x_coeff = 1 / ((x_end - x_start) * 4)
+    y_coeff = 1 / ((y_end - y_start) * 4)
+    # x_coeff = 1 / ((x_end - x_start) * 4 * np.pi)
+    # y_coeff = 1 / ((y_end - y_start) * 4 * np.pi)
+    # x_coeff = 1 / ((x_end - x_start) * 4 * np.pi ** 2)
+    # y_coeff = 1 / ((y_end - y_start) * 4 * np.pi ** 2)
+    x_theta_1 = 2 * np.pi * x_start
+    x_theta_2 = 2 * np.pi * x_end
+    y_theta_1 = 2 * np.pi * y_start
+    y_theta_2 = 2 * np.pi * y_end
+
+    m = torch.arange(encoding_dim // 4, dtype=float)[None, :] + 1 # degrees for fourier series 
+    x_a_m = x_coeff * ((torch.sin(m * x_theta_2) - torch.sin(m * x_theta_1)) / m)
+    x_b_m = x_coeff * ((torch.cos(m * x_theta_1) - torch.cos(m * x_theta_2)) / m)
+    y_a_m = x_coeff * ((torch.sin(m * y_theta_2) - torch.sin(m * y_theta_1)) / m)
+    y_b_m = x_coeff * ((torch.sin(m * y_theta_1) - torch.sin(m * y_theta_2)) / m)
+    ae = torch.cat([x_a_m, x_b_m, y_a_m, y_b_m], dim=-1)
+
+    return ae
+
+def get_naive_ae_for_patch(pos, encoding_dim=192, sin_table_2d=None):
+    """
+    pos_info : (num_of_patches, 4)
+    sin_table_2d = (img_size, img_size, encoding_dim)
+    ae : (num_of_patches, encoding_dim)
+    """
+    x_start, x_end, y_start, y_end = pos[:, 0], pos[:, 1], pos[:, 2], pos[:, 3]
+
+    # TODO: parallelize
+    ae = torch.zeros(len(pos), encoding_dim)
+    for i in range(len(pos)):
+        ae[i] = torch.mean(sin_table_2d[x_start[i]: x_end[i], y_start[i]: y_end[i]], axis=(0, 1))
+
+    return ae
+
 
 class DistilledVisionTransformer(VisionTransformer):
     def __init__(self, *args, **kwargs):
@@ -59,6 +139,7 @@ class DistilledVisionTransformer(VisionTransformer):
             return (x + x_dist) / 2
 
 
+# default
 @register_model
 def deit_tiny_patch16_224(pretrained=False, **kwargs):
     model = VisionTransformer(
@@ -73,6 +154,96 @@ def deit_tiny_patch16_224(pretrained=False, **kwargs):
         model.load_state_dict(checkpoint["model"])
     return model
 
+
+# without pos embed
+@register_model
+def deit_tiny_patch16_224_without_pos(pretrained=False, **kwargs):
+    model = VisionTransformer(
+        patch_size=16, embed_dim=192, depth=12, num_heads=3, mlp_ratio=4, qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
+    model.default_cfg = _cfg()
+    # without pos_embed (implemented as fixed zero embedding)
+    num_patches = model.patch_embed.num_patches
+    model.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, model.embed_dim), requires_grad=False)
+    if pretrained:
+        checkpoint = torch.hub.load_state_dict_from_url(
+            url="https://dl.fbaipublicfiles.com/deit/deit_tiny_patch16_224-a1311bcf.pth",
+            map_location="cpu", check_hash=True
+        )
+        model.load_state_dict(checkpoint["model"])
+    return model
+
+
+# with sinusoidal pos embed
+@register_model
+def deit_tiny_patch16_224_with_sin(pretrained=False, **kwargs):
+    model = VisionTransformer(
+        patch_size=16, embed_dim=192, depth=12, num_heads=3, mlp_ratio=4, qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
+    model.default_cfg = _cfg()
+
+    # sinusoidal positional embedding
+    num_patches = model.patch_embed.num_patches
+    pos_encoding = get_sinusoid_encoding_table(num_patches + 1, model.embed_dim)
+    pos_embed = nn.Parameter(pos_encoding[None, ...], requires_grad=False)
+    model.pos_embed = pos_embed
+
+    if pretrained:
+        checkpoint = torch.hub.load_state_dict_from_url(
+            url="https://dl.fbaipublicfiles.com/deit/deit_tiny_patch16_224-a1311bcf.pth",
+            map_location="cpu", check_hash=True
+        )
+        model.load_state_dict(checkpoint["model"])
+    return model
+
+
+# with aaud area embed
+@register_model
+def deit_tiny_patch16_224_with_aaud(pretrained=False, **kwargs):
+    model = VisionTransformer(
+        patch_size=16, embed_dim=192, depth=12, num_heads=3, mlp_ratio=4, qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
+    model.default_cfg = _cfg()
+
+    # area encoding
+    num_patches = model.patch_embed.num_patches
+    model.pos_embed = get_area_encoding(num_patches, 
+                                       model.embed_dim, 
+                                       mode='aaud',
+                                       n_extra_tokens=1)
+
+    if pretrained:
+        checkpoint = torch.hub.load_state_dict_from_url(
+            url="https://dl.fbaipublicfiles.com/deit/deit_tiny_patch16_224-a1311bcf.pth",
+            map_location="cpu", check_hash=True
+        )
+        model.load_state_dict(checkpoint["model"])
+    return model
+
+
+# with naive area embed
+@register_model
+def deit_tiny_patch16_224_with_naive_ae(pretrained=False, **kwargs):
+    model = VisionTransformer(
+        patch_size=16, embed_dim=192, depth=12, num_heads=3, mlp_ratio=4, qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
+    model.default_cfg = _cfg()
+
+    # area encoding
+    num_patches = model.patch_embed.num_patches
+    model.pos_embed = get_area_encoding(num_patches, 
+                                        model.embed_dim, 
+                                        mode='naive', 
+                                        n_extra_tokens=1,
+                                        img_size=224)
+
+    if pretrained:
+        checkpoint = torch.hub.load_state_dict_from_url(
+            url="https://dl.fbaipublicfiles.com/deit/deit_tiny_patch16_224-a1311bcf.pth",
+            map_location="cpu", check_hash=True
+        )
+        model.load_state_dict(checkpoint["model"])
+    return model
 
 @register_model
 def deit_small_patch16_224(pretrained=False, **kwargs):
