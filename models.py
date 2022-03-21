@@ -1,5 +1,6 @@
 # Copyright (c) 2015-present, Facebook, Inc.
 # All rights reserved.
+import numpy as np
 import torch
 import torch.nn as nn
 from functools import partial
