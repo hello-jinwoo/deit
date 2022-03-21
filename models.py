@@ -265,7 +265,7 @@ def deit_tiny_patch16_224_with_sin_and_aaud(pretrained=False, **kwargs):
     num_patches = model.patch_embed.num_patches
     # sinusoidal encoding
     sin_pos_encoding = get_sinusoid_encoding_table(num_patches + 1, model.embed_dim)
-    pos_embed = nn.Parameter(sin_pos_encoding[None, ...], requires_grad=False)
+    model.pos_embed = nn.Parameter(sin_pos_encoding[None, ...], requires_grad=False)
     # area encoding    
     model.pos_embed += get_area_encoding(num_patches, 
                                        model.embed_dim, 
