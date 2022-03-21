@@ -74,6 +74,11 @@ def get_aaud_for_patch(pos, encoding_dim=192):
     # scale_v3
     x_coeff = 1 / ((x_end - x_start) * np.pi ** 2)
     y_coeff = 1 / ((y_end - y_start) * np.pi ** 2)
+    # scale_v4
+    # x_coeff = 1 / ((x_end - x_start) * 4 * np.pi ** 2)
+    # y_coeff = 1 / ((y_end - y_start) * 4 * np.pi ** 2)
+    # x_coeff = (x_coeff - min(x_coeff)) / max(x_coeff)
+    # y_coeff = (y_coeff - min(y_coeff)) / max(y_coeff)
     
     
     x_theta_1 = 2 * np.pi * x_start
