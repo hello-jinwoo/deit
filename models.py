@@ -199,7 +199,8 @@ def deit_tiny_patch16_224_with_sin(pretrained=False, **kwargs):
     # sinusoidal positional embedding
     num_patches = model.patch_embed.num_patches
     pos_encoding = get_sinusoid_encoding_table(num_patches + 1, model.embed_dim)
-    model.pos_embed = nn.Parameter(pos_encoding[None, ...], requires_grad=False)
+    pos_emb = nn.Parameter(pos_encoding[None, ...], requires_grad=False)
+    model.pos_embed = pos_emb
 
     if pretrained:
         checkpoint = torch.hub.load_state_dict_from_url(
