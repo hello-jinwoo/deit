@@ -261,6 +261,35 @@ def deit_tiny_patch16_224_with_naive_ae(pretrained=False, **kwargs):
     return model
 
 
+# with sin and naive area embed
+@register_model
+def deit_tiny_patch16_224_with_sin_and_naive(pretrained=False, **kwargs):
+    model = VisionTransformer(
+        patch_size=16, embed_dim=192, depth=12, num_heads=3, mlp_ratio=4, qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
+    model.default_cfg = _cfg()
+
+    num_patches = model.patch_embed.num_patches
+    # sinusoidal encoding
+    sin_pos_encoding = get_sinusoid_encoding_table(num_patches + 1, model.embed_dim)
+    model.pos_embed = nn.Parameter(sin_pos_encoding[None, ...], requires_grad=False)
+    # area encoding    
+    model.pos_embed += get_area_encoding(num_patches, 
+                                         model.embed_dim, 
+                                         mode='naive', 
+                                         n_extra_tokens=1,
+                                         img_size=224)
+    # model.pos_embed /= 2.
+
+    if pretrained:
+        checkpoint = torch.hub.load_state_dict_from_url(
+            url="https://dl.fbaipublicfiles.com/deit/deit_tiny_patch16_224-a1311bcf.pth",
+            map_location="cpu", check_hash=True
+        )
+        model.load_state_dict(checkpoint["model"])
+    return model
+
+
 # with sin and aaud area embed
 @register_model
 def deit_tiny_patch16_224_with_sin_and_aaud(pretrained=False, **kwargs):
@@ -275,9 +304,9 @@ def deit_tiny_patch16_224_with_sin_and_aaud(pretrained=False, **kwargs):
     model.pos_embed = nn.Parameter(sin_pos_encoding[None, ...], requires_grad=False)
     # area encoding    
     model.pos_embed += get_area_encoding(num_patches, 
-                                       model.embed_dim, 
-                                       mode='aaud',
-                                       n_extra_tokens=1)
+                                        model.embed_dim, 
+                                        mode='aaud',
+                                        n_extra_tokens=1)
     # model.pos_embed /= 2.
 
     if pretrained:
