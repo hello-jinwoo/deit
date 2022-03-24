@@ -63,8 +63,8 @@ def get_aaud_for_patch(pos, encoding_dim=192):
 
     # IN PROGRESS: experiments on scale of coefficient
     # scale_v0
-    # x_coeff = 1 / ((x_end - x_start) * 4 * np.pi ** 2)
-    # y_coeff = 1 / ((y_end - y_start) * 4 * np.pi ** 2)
+    x_coeff = 1 / ((x_end - x_start) * 4 * np.pi ** 2)
+    y_coeff = 1 / ((y_end - y_start) * 4 * np.pi ** 2)
     # scale_v1
     # x_coeff = 1 / ((x_end - x_start) * 4)
     # y_coeff = 1 / ((y_end - y_start) * 4)
@@ -72,14 +72,8 @@ def get_aaud_for_patch(pos, encoding_dim=192):
     # x_coeff = 1 / ((x_end - x_start) * 4 * np.pi)
     # y_coeff = 1 / ((y_end - y_start) * 4 * np.pi)
     # scale_v3
-    x_coeff = 1 / ((x_end - x_start) * np.pi ** 2)
-    y_coeff = 1 / ((y_end - y_start) * np.pi ** 2)
-    # scale_v4
-    # x_coeff = 1 / ((x_end - x_start) * 4 * np.pi ** 2)
-    # y_coeff = 1 / ((y_end - y_start) * 4 * np.pi ** 2)
-    # x_coeff = (x_coeff - min(x_coeff)) / max(x_coeff)
-    # y_coeff = (y_coeff - min(y_coeff)) / max(y_coeff)
-    
+    # x_coeff = 1 / ((x_end - x_start) * np.pi ** 2)
+    # y_coeff = 1 / ((y_end - y_start) * np.pi ** 2)
     
     x_theta_1 = 2 * np.pi * x_start
     x_theta_2 = 2 * np.pi * x_end
@@ -91,6 +85,13 @@ def get_aaud_for_patch(pos, encoding_dim=192):
     x_b_m = x_coeff * ((torch.cos(m * x_theta_1) - torch.cos(m * x_theta_2)) / m)
     y_a_m = x_coeff * ((torch.sin(m * y_theta_2) - torch.sin(m * y_theta_1)) / m)
     y_b_m = x_coeff * ((torch.sin(m * y_theta_1) - torch.sin(m * y_theta_2)) / m)
+
+    # scale_v4
+    x_a_m = (x_a_m - min(x_a_m)) / max(x_a_m)
+    x_b_m = (x_b_m - min(x_b_m)) / max(x_b_m)
+    y_a_m = (y_a_m - min(y_a_m)) / max(y_a_m)
+    y_b_m = (y_b_m - min(y_b_m)) / max(y_b_m)
+
     ae = torch.cat([x_a_m, x_b_m, y_a_m, y_b_m], dim=-1)
 
     return ae
