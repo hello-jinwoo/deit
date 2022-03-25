@@ -177,9 +177,11 @@ def deit_tiny_patch16_224_without_pos(pretrained=False, **kwargs):
         patch_size=16, embed_dim=192, depth=12, num_heads=3, mlp_ratio=4, qkv_bias=True,
         norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
     model.default_cfg = _cfg()
+
     # without pos_embed (implemented as fixed zero embedding)
     num_patches = model.patch_embed.num_patches
     model.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, model.embed_dim), requires_grad=False)
+    
     if pretrained:
         checkpoint = torch.hub.load_state_dict_from_url(
             url="https://dl.fbaipublicfiles.com/deit/deit_tiny_patch16_224-a1311bcf.pth",
@@ -324,6 +326,99 @@ def deit_small_patch16_224(pretrained=False, **kwargs):
         patch_size=16, embed_dim=384, depth=12, num_heads=6, mlp_ratio=4, qkv_bias=True,
         norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
     model.default_cfg = _cfg()
+    if pretrained:
+        checkpoint = torch.hub.load_state_dict_from_url(
+            url="https://dl.fbaipublicfiles.com/deit/deit_small_patch16_224-cd65a155.pth",
+            map_location="cpu", check_hash=True
+        )
+        model.load_state_dict(checkpoint["model"])
+    return model
+
+
+# without pos embed
+@register_model
+def deit_small_patch16_224_without_pos(pretrained=False, **kwargs):
+    model = VisionTransformer(
+        patch_size=16, embed_dim=384, depth=12, num_heads=6, mlp_ratio=4, qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
+    model.default_cfg = _cfg()
+
+    # without pos_embed (implemented as fixed zero embedding)
+    num_patches = model.patch_embed.num_patches
+    model.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, model.embed_dim), requires_grad=False)
+
+    if pretrained:
+        checkpoint = torch.hub.load_state_dict_from_url(
+            url="https://dl.fbaipublicfiles.com/deit/deit_small_patch16_224-cd65a155.pth",
+            map_location="cpu", check_hash=True
+        )
+        model.load_state_dict(checkpoint["model"])
+    return model
+
+
+# with sinusoidal pos embed
+@register_model
+def deit_small_patch16_224_with_sin(pretrained=False, **kwargs):
+    model = VisionTransformer(
+        patch_size=16, embed_dim=384, depth=12, num_heads=6, mlp_ratio=4, qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
+    model.default_cfg = _cfg()
+
+    # sinusoidal positional embedding
+    num_patches = model.patch_embed.num_patches
+    pos_encoding = get_sinusoid_encoding_table(num_patches + 1, model.embed_dim)
+    pos_emb = nn.Parameter(pos_encoding[None, ...], requires_grad=False)
+    model.pos_embed = pos_emb
+
+    if pretrained:
+        checkpoint = torch.hub.load_state_dict_from_url(
+            url="https://dl.fbaipublicfiles.com/deit/deit_small_patch16_224-cd65a155.pth",
+            map_location="cpu", check_hash=True
+        )
+        model.load_state_dict(checkpoint["model"])
+    return model
+
+
+# with naive area embed
+@register_model
+def deit_small_patch16_224_with_naive(pretrained=False, **kwargs):
+    model = VisionTransformer(
+        patch_size=16, embed_dim=384, depth=12, num_heads=6, mlp_ratio=4, qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
+    model.default_cfg = _cfg()
+
+    # area encoding
+    num_patches = model.patch_embed.num_patches
+    model.pos_embed = get_area_encoding(num_patches, 
+                                        model.embed_dim, 
+                                        mode='naive', 
+                                        n_extra_tokens=1,
+                                        img_size=224)
+
+    if pretrained:
+        checkpoint = torch.hub.load_state_dict_from_url(
+            url="https://dl.fbaipublicfiles.com/deit/deit_small_patch16_224-cd65a155.pth",
+            map_location="cpu", check_hash=True
+        )
+        model.load_state_dict(checkpoint["model"])
+    return model
+
+
+# with aaud area embed
+@register_model
+def deit_small_patch16_224_with_aaud(pretrained=False, **kwargs):
+    model = VisionTransformer(
+        patch_size=16, embed_dim=384, depth=12, num_heads=6, mlp_ratio=4, qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
+    model.default_cfg = _cfg()
+
+    # area encoding
+    num_patches = model.patch_embed.num_patches
+    model.pos_embed = get_area_encoding(num_patches, 
+                                       model.embed_dim, 
+                                       mode='aaud',
+                                       n_extra_tokens=1)
+
     if pretrained:
         checkpoint = torch.hub.load_state_dict_from_url(
             url="https://dl.fbaipublicfiles.com/deit/deit_small_patch16_224-cd65a155.pth",
