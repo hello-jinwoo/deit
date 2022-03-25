@@ -62,18 +62,18 @@ def get_aaud_for_patch(pos, encoding_dim=192):
     x_start, x_end, y_start, y_end = x_start[:, None], x_end[:, None], y_start[:, None], y_end[:, None]
 
     # IN PROGRESS: experiments on scale of coefficient
-    # scale_v0
-    x_coeff = 1 / ((x_end - x_start) * 4 * np.pi ** 2)
-    y_coeff = 1 / ((y_end - y_start) * 4 * np.pi ** 2)
+    # # scale_v0
+    # x_coeff = 1 / ((x_end - x_start) * 4 * np.pi ** 2)
+    # y_coeff = 1 / ((y_end - y_start) * 4 * np.pi ** 2)
     # scale_v1
     # x_coeff = 1 / ((x_end - x_start) * 4)
     # y_coeff = 1 / ((y_end - y_start) * 4)
     # scale_v2
     # x_coeff = 1 / ((x_end - x_start) * 4 * np.pi)
     # y_coeff = 1 / ((y_end - y_start) * 4 * np.pi)
-    # scale_v3
-    # x_coeff = 1 / ((x_end - x_start) * np.pi ** 2)
-    # y_coeff = 1 / ((y_end - y_start) * np.pi ** 2)
+    scale_v3
+    x_coeff = 1 / ((x_end - x_start) * np.pi ** 2)
+    y_coeff = 1 / ((y_end - y_start) * np.pi ** 2)
     
     x_theta_1 = 2 * np.pi * x_start
     x_theta_2 = 2 * np.pi * x_end
@@ -86,11 +86,11 @@ def get_aaud_for_patch(pos, encoding_dim=192):
     y_a_m = x_coeff * ((torch.sin(m * y_theta_2) - torch.sin(m * y_theta_1)) / m)
     y_b_m = x_coeff * ((torch.sin(m * y_theta_1) - torch.sin(m * y_theta_2)) / m)
 
-    # scale_v4
-    x_a_m = (x_a_m - x_a_m.min()) / x_a_m.max()
-    x_b_m = (x_b_m - x_b_m.min()) / x_b_m.max()
-    y_a_m = (y_a_m - y_a_m.min()) / y_a_m.max()
-    y_b_m = (y_b_m - y_b_m.min()) / y_b_m.max()
+    # # scale_v4
+    # x_a_m = (x_a_m - x_a_m.min()) / x_a_m.max()
+    # x_b_m = (x_b_m - x_b_m.min()) / x_b_m.max()
+    # y_a_m = (y_a_m - y_a_m.min()) / y_a_m.max()
+    # y_b_m = (y_b_m - y_b_m.min()) / y_b_m.max()
 
     ae = torch.cat([x_a_m, x_b_m, y_a_m, y_b_m], dim=-1)
 
@@ -339,6 +339,97 @@ def deit_base_patch16_224(pretrained=False, **kwargs):
         patch_size=16, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True,
         norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
     model.default_cfg = _cfg()
+    if pretrained:
+        checkpoint = torch.hub.load_state_dict_from_url(
+            url="https://dl.fbaipublicfiles.com/deit/deit_base_patch16_224-b5f2ef4d.pth",
+            map_location="cpu", check_hash=True
+        )
+        model.load_state_dict(checkpoint["model"])
+    return model
+
+
+# without pos embed
+@register_model
+def deit_base_patch16_224_without_pos(pretrained=False, **kwargs):
+    model = VisionTransformer(
+        patch_size=16, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
+    model.default_cfg = _cfg()
+    # without pos_embed (implemented as fixed zero embedding)
+    num_patches = model.patch_embed.num_patches
+    model.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, model.embed_dim), requires_grad=False)
+    if pretrained:
+        checkpoint = torch.hub.load_state_dict_from_url(
+            url="https://dl.fbaipublicfiles.com/deit/deit_base_patch16_224-b5f2ef4d.pth",
+            map_location="cpu", check_hash=True
+        )
+        model.load_state_dict(checkpoint["model"])
+    return model
+
+
+# with sinusoidal pos embed
+@register_model
+def deit_base_patch16_224_with_sin(pretrained=False, **kwargs):
+    model = VisionTransformer(
+        patch_size=16, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
+    model.default_cfg = _cfg()
+
+    # sinusoidal positional embedding
+    num_patches = model.patch_embed.num_patches
+    pos_encoding = get_sinusoid_encoding_table(num_patches + 1, model.embed_dim)
+    pos_emb = nn.Parameter(pos_encoding[None, ...], requires_grad=False)
+    model.pos_embed = pos_emb
+
+    if pretrained:
+        checkpoint = torch.hub.load_state_dict_from_url(
+            url="https://dl.fbaipublicfiles.com/deit/deit_base_patch16_224-b5f2ef4d.pth",
+            map_location="cpu", check_hash=True
+        )
+        model.load_state_dict(checkpoint["model"])
+    return model
+
+
+# with naive area embed
+@register_model
+def deit_base_patch16_224_with_naive(pretrained=False, **kwargs):
+    model = VisionTransformer(
+        patch_size=16, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
+    model.default_cfg = _cfg()
+
+    # area encoding
+    num_patches = model.patch_embed.num_patches
+    model.pos_embed = get_area_encoding(num_patches, 
+                                        model.embed_dim, 
+                                        mode='naive', 
+                                        n_extra_tokens=1,
+                                        img_size=224)
+
+    if pretrained:
+        checkpoint = torch.hub.load_state_dict_from_url(
+            url="https://dl.fbaipublicfiles.com/deit/deit_base_patch16_224-b5f2ef4d.pth",
+            map_location="cpu", check_hash=True
+        )
+        model.load_state_dict(checkpoint["model"])
+    return model
+
+
+# with aaud area embed
+@register_model
+def deit_base_patch16_224_with_aaud(pretrained=False, **kwargs):
+    model = VisionTransformer(
+        patch_size=16, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
+    model.default_cfg = _cfg()
+
+    # area encoding
+    num_patches = model.patch_embed.num_patches
+    model.pos_embed = get_area_encoding(num_patches, 
+                                       model.embed_dim, 
+                                       mode='aaud',
+                                       n_extra_tokens=1)
+
     if pretrained:
         checkpoint = torch.hub.load_state_dict_from_url(
             url="https://dl.fbaipublicfiles.com/deit/deit_base_patch16_224-b5f2ef4d.pth",
