@@ -71,7 +71,7 @@ def get_aaud_for_patch(pos, encoding_dim=192):
     # scale_v2
     # x_coeff = 1 / ((x_end - x_start) * 4 * np.pi)
     # y_coeff = 1 / ((y_end - y_start) * 4 * np.pi)
-    scale_v3
+    # scale_v3
     x_coeff = 1 / ((x_end - x_start) * np.pi ** 2)
     y_coeff = 1 / ((y_end - y_start) * np.pi ** 2)
     
