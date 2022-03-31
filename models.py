@@ -92,11 +92,11 @@ def get_aaud_for_patch(pos, encoding_dim=192):
     y_a_m = x_coeff * ((torch.sin(m * y_theta_2) - torch.sin(m * y_theta_1)) / m)
     y_b_m = x_coeff * ((torch.sin(m * y_theta_1) - torch.sin(m * y_theta_2)) / m)
 
-    # # scale_v4
-    # x_a_m = (x_a_m - x_a_m.min()) / x_a_m.max()
-    # x_b_m = (x_b_m - x_b_m.min()) / x_b_m.max()
-    # y_a_m = (y_a_m - y_a_m.min()) / y_a_m.max()
-    # y_b_m = (y_b_m - y_b_m.min()) / y_b_m.max()
+    # # scale_v7
+    x_a_m = (x_a_m + 0.15) / 0.3
+    x_b_m = (x_b_m + 0.15) / 0.3
+    y_a_m = (y_a_m + 0.15) / 0.3
+    y_b_m = (y_b_m + 0.15) / 0.3
 
     ae = torch.cat([x_a_m, x_b_m, y_a_m, y_b_m], dim=-1)
 
