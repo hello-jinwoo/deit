@@ -87,7 +87,7 @@ def get_aaud_for_patch(pos, encoding_dim=192):
     y_theta_1 = np.pi * y_start
     y_theta_2 = np.pi * y_end
 
-    m = torch.arange(encoding_dim // 8, dtype=pos_tensor.dtype, device=pos_tensor.device)[None, :] + 1 # degrees for fourier series 
+    m = torch.arange(encoding_dim // 8, dtype=pos.dtype, device=pos.device)[None, :] + 1 # degrees for fourier series 
     x_a_m_1 = x_coeff * torch.sin(m * x_theta_1) / m
     x_a_m_2 = x_coeff * torch.sin(m * x_theta_2) / m
     x_b_m_1 = x_coeff * torch.cos(m * x_theta_1) / m
