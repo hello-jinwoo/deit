@@ -58,6 +58,7 @@ def get_aaud_for_patch(pos, encoding_dim=192):
     pos_info : (num_of_patches, 4)
     ae : (num_of_patches, encoding_dim)
     """
+    pos -= 0.5
     x_start, x_end, y_start, y_end = pos[:, 0], pos[:, 1], pos[:, 2], pos[:, 3]
     x_start, x_end, y_start, y_end = x_start[:, None], x_end[:, None], y_start[:, None], y_end[:, None]
 
@@ -81,16 +82,20 @@ def get_aaud_for_patch(pos, encoding_dim=192):
     # x_coeff = 1 / (x_end - x_start)
     # y_coeff = 1 / (y_end - y_start)
     
-    x_theta_1 = 2 * np.pi * x_start
-    x_theta_2 = 2 * np.pi * x_end
-    y_theta_1 = 2 * np.pi * y_start
-    y_theta_2 = 2 * np.pi * y_end
+    x_theta_1 = np.pi * x_start
+    x_theta_2 = np.pi * x_end
+    y_theta_1 = np.pi * y_start
+    y_theta_2 = np.pi * y_end
 
-    m = torch.arange(encoding_dim // 4, dtype=float)[None, :] + 1 # degrees for fourier series 
-    x_a_m = x_coeff * ((torch.sin(m * x_theta_2) - torch.sin(m * x_theta_1)) / m)
-    x_b_m = x_coeff * ((torch.cos(m * x_theta_1) - torch.cos(m * x_theta_2)) / m)
-    y_a_m = y_coeff * ((torch.sin(m * y_theta_2) - torch.sin(m * y_theta_1)) / m)
-    y_b_m = y_coeff * ((torch.cos(m * y_theta_1) - torch.cos(m * y_theta_2)) / m)
+    m = torch.arange(encoding_dim // 8, dtype=pos_tensor.dtype, device=pos_tensor.device)[None, :] + 1 # degrees for fourier series 
+    x_a_m_1 = x_coeff * torch.sin(m * x_theta_1) / m
+    x_a_m_2 = x_coeff * torch.sin(m * x_theta_2) / m
+    x_b_m_1 = x_coeff * torch.cos(m * x_theta_1) / m
+    x_b_m_2 = x_coeff * torch.cos(m * x_theta_2) / m
+    y_a_m_1 = y_coeff * torch.sin(m * y_theta_1) / m
+    y_a_m_2 = y_coeff * torch.sin(m * y_theta_2) / m
+    y_b_m_1 = y_coeff * torch.cos(m * y_theta_1) / m
+    y_b_m_2 = y_coeff * torch.cos(m * y_theta_2) / m
 
     # # scale_v7
     # x_a_m = (x_a_m + 0.15) / 0.3
@@ -98,7 +103,7 @@ def get_aaud_for_patch(pos, encoding_dim=192):
     # y_a_m = (y_a_m + 0.15) / 0.3
     # y_b_m = (y_b_m + 0.15) / 0.3
 
-    ae = torch.cat([x_a_m, x_b_m, y_a_m, y_b_m], dim=-1)
+    ae = torch.cat([x_a_m_1, x_a_m_2, x_b_m_1, x_b_m_2, y_a_m_1, y_a_m_2, y_b_m_1, y_b_m_2], dim=-1)
 
     return ae
 
